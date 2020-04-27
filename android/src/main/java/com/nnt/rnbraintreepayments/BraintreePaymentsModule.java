@@ -81,12 +81,12 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         }
     }
 
-    private final WritableMap getPaymentNonce(PaymentMethodNonce paymentMethodNonce) {
+    private final WritableMap getPaymentNonce(String nonce, String type, String description, boolean isDefault) {
         WritableMap jsResult = Arguments.createMap();
-        jsResult.putString("nonce", paymentMethodNonce.getNonce());
-        jsResult.putString("type", paymentMethodNonce.getTypeLabel());
-        jsResult.putString("description", paymentMethodNonce.getDescription());
-        jsResult.putBoolean("isDefault", paymentMethodNonce.isDefault());
+        jsResult.putString("nonce", nonce);
+        jsResult.putString("type", type);
+        jsResult.putString("description", description);
+        jsResult.putBoolean("isDefault", isDefault);
         return jsResult;
     }
 
@@ -171,7 +171,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         } else if (!threeDSecureInfo.isLiabilityShifted()) {
             promise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
         } else {
-            promise.resolve(getPaymentNonce(cardNonce));
+            promise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), "ending in " +cardNonce.getLastFour(), cardNonce.isDefault()));
         }
     }
     
@@ -268,17 +268,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                         if (isThreeDSecureVerificationComplete) {
                             resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
                             isThreeDSecureVerificationComplete = false;
-
-                            // ThreeDSecureInfo threeDSecureInfo = cardNonce.getThreeDSecureInfo();
-                            // if (!threeDSecureInfo.isLiabilityShiftPossible()) {
-                            //     promise.reject("3DSECURE_NOT_ABLE_TO_SHIFT_LIABILITY", "3D Secure liability cannot be shifted");
-                            // } else if (!threeDSecureInfo.isLiabilityShifted()) {
-                            //     promise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
-                            // } else {
-                            //     promise.resolve(getPaymentNonce(paymentMethodNonce));
-                            // }
                             checkCardThreeDSecure(cardNonce, promise);
-                            
                         } else {
                             ThreeDSecureRequest threeDSecureRequest = getThreeDSecureRequest(threeDSecureOptions, cardNonce.getNonce());
                             ThreeDSecure.performVerification(mBraintreeFragment, threeDSecureRequest, new ThreeDSecureLookupListener() {
@@ -292,8 +282,12 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                         }
                     } else {
                         resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
-                        
-                        promise.resolve(getPaymentNonce(paymentMethodNonce));
+                        if (paymentMethodNonce instanceof CardNonce) {
+                            CardNonce cardNonce = (CardNonce) paymentMethodNonce;
+                            promise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), "ending in " +cardNonce.getLastFour(), cardNonce.isDefault()));
+                        } else {
+                            promise.resolve(getPaymentNonce(paymentMethodNonce.getNonce(), paymentMethodNonce.getTypeLabel(), paymentMethodNonce.getDescription(), paymentMethodNonce.isDefault()));
+                        }
                     }
 
                 }
@@ -457,17 +451,14 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
                 if (threeDSecureOptions != null && paymentMethodNonce instanceof CardNonce) {
                     CardNonce cardNonce = (CardNonce) paymentMethodNonce;
-                    ThreeDSecureInfo threeDSecureInfo = cardNonce.getThreeDSecureInfo();
-                    // if (!threeDSecureInfo.isLiabilityShiftPossible()) {
-                    //     mPromise.reject("3DSECURE_NOT_ABLE_TO_SHIFT_LIABILITY", "3D Secure liability cannot be shifted");
-                    // } else if (!threeDSecureInfo.isLiabilityShifted()) {
-                    //     mPromise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
-                    // } else {
-                    //     mPromise.resolve(getPaymentNonce(paymentMethodNonce));
-                    // }
                     checkCardThreeDSecure(cardNonce, mPromise);
                 } else {
-                    mPromise.resolve(getPaymentNonce(paymentMethodNonce));
+                    if (paymentMethodNonce instanceof CardNonce) {
+                        CardNonce cardNonce = (CardNonce) paymentMethodNonce;
+                        mPromise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), "ending in " +cardNonce.getLastFour(), cardNonce.isDefault()));
+                    } else {
+                        mPromise.resolve(getPaymentNonce(paymentMethodNonce.getNonce(), paymentMethodNonce.getTypeLabel(), paymentMethodNonce.getDescription(), paymentMethodNonce.isDefault()));
+                    }
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 mPromise.reject("USER_CANCELLATION", "The user cancelled");
