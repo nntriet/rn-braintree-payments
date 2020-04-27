@@ -77,11 +77,10 @@ dependencies {
     // Braintree Drop-in
     implementation 'com.braintreepayments.api:drop-in:4.+'
 
-    // Braintree Client SDK
+    // Braintree Client SDK + 3D Secure
     implementation 'com.braintreepayments.api:braintree:3.+'
-
     // Braintree 3D Secure
-    implementation 'com.braintreepayments.api:three-d-secure:3.+'
+    // implementation 'com.braintreepayments.api:three-d-secure:3.+'
 
     // Braintree data-collector
     // implementation 'com.braintreepayments.api:data-collector:3.+'

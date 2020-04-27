@@ -54,6 +54,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
     private BraintreeFragment mBraintreeFragment;
     private Promise mPromise;
 
+    private boolean isThreeDSecureVerificationComplete = false;
+
     public BraintreePaymentsModule(ReactApplicationContext reactContext) {
         super(reactContext);
         reactContext.addActivityEventListener(mActivityListener);
@@ -91,38 +93,58 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
     private final ThreeDSecureRequest getThreeDSecureRequest(final ReadableMap threeDSecureOpts, final String nonce) {
         String amount = String.valueOf(threeDSecureOpts.getDouble("amount")); // Required
         String email = null;
+        
+        String givenName = null;
+        String surname = null;
+        String phoneNumber = null;
+        String streetAddress = null;
+        String extendedAddress = null;
+        String locality = null;
+        String region = null;
+        String postalCode = null;
+        String countryCodeAlpha2 = null;
 
-        ThreeDSecurePostalAddress address = new ThreeDSecurePostalAddress();
         if (threeDSecureOpts.hasKey("email")) {
             email = threeDSecureOpts.getString("email");
         }
         if (threeDSecureOpts.hasKey("givenName")) {
-            address.givenName = threeDSecureOpts.getString("givenName"); // ASCII-printable characters required, else will throw a validation error
+            givenName = threeDSecureOpts.getString("givenName");
         }
         if (threeDSecureOpts.hasKey("surname")) {
-            address.surname = threeDSecureOpts.getString("surname"); // ASCII-printable characters required, else will throw a validation error
+            surname = threeDSecureOpts.getString("surname");
         }
         if (threeDSecureOpts.hasKey("phoneNumber")) {
-            address.phoneNumber = threeDSecureOpts.getString("phoneNumber"); // Only number
+            phoneNumber = threeDSecureOpts.getString("phoneNumber"); // Only number
         }
         if (threeDSecureOpts.hasKey("streetAddress")) {
-            address.streetAddress = threeDSecureOpts.getString("streetAddress");
+            streetAddress = threeDSecureOpts.getString("streetAddress");
         }
         if (threeDSecureOpts.hasKey("extendedAddress")) {
-            address.extendedAddress = threeDSecureOpts.getString("extendedAddress");
+            extendedAddress = threeDSecureOpts.getString("extendedAddress");
         }
         if (threeDSecureOpts.hasKey("locality")) {
-            address.locality = threeDSecureOpts.getString("locality");
+            locality = threeDSecureOpts.getString("locality");
         }
         if (threeDSecureOpts.hasKey("region")) {
-            address.region = threeDSecureOpts.getString("region");
+            region = threeDSecureOpts.getString("region");
         }
         if (threeDSecureOpts.hasKey("postalCode")) {
-            address.postalCode = threeDSecureOpts.getString("postalCode");
+            postalCode = threeDSecureOpts.getString("postalCode");
         }
         if (threeDSecureOpts.hasKey("countryCodeAlpha2")) {
-            address.countryCodeAlpha2 = threeDSecureOpts.getString("countryCodeAlpha2");
+            countryCodeAlpha2 = threeDSecureOpts.getString("countryCodeAlpha2");
         }
+
+        ThreeDSecurePostalAddress address = new ThreeDSecurePostalAddress()
+            .givenName(givenName) // ASCII-printable characters required, else will throw a validation error
+            .surname(surname) // ASCII-printable characters required, else will throw a validation error
+            .phoneNumber(phoneNumber)
+            .streetAddress(streetAddress)
+            .extendedAddress(extendedAddress)
+            .locality(locality)
+            .region(region)
+            .postalCode(postalCode)
+            .countryCodeAlpha2(countryCodeAlpha2);
 
         // For best results, provide as many additional elements as possible.
         ThreeDSecureAdditionalInformation additionalInformation = new ThreeDSecureAdditionalInformation()
@@ -165,6 +187,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                 return false;
             }
             threeDSecureOptions = threeDSecureOpts;
+        } else {
+            threeDSecureOptions = null;
         }
         mPromise = promise;
         return true;
@@ -183,9 +207,9 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
         final List<BraintreeListener> previousListeners = mBraintreeFragment.getListeners();
         final ListenerHolder listenerHolder = new ListenerHolder();
+        
+
         try {
-            boolean isThreeDSecureVerificationComplete = false;
-            
             BraintreeCancelListener cancelListener = new BraintreeCancelListener() {
                 @Override
                 public void onCancel(int requestCode) {
@@ -200,7 +224,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                 @Override
                 public void onError(Exception error) {
                     resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
-
+                    
                     if (error instanceof ErrorWithResponse) {
                         ErrorWithResponse errorWithResponse = (ErrorWithResponse) error;
                         BraintreeError cardErrors = errorWithResponse.errorFor("creditCard");
@@ -229,6 +253,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                         } else {
                             promise.reject("CARD_ERROR", errorWithResponse.getErrorResponse());
                         }
+                    } else {
+                        promise.reject("CARD_ERROR", error.getMessage());
                     }
                 }
             };
@@ -321,9 +347,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             return;
         }
 
-        CardBuilder cardBuilder = new CardBuilder()
-            .validate(true);
-
+        CardBuilder cardBuilder = new CardBuilder();
+            
         if (options.hasKey("number")) {
             cardBuilder.cardNumber(options.getString("number"));
         }
@@ -377,6 +402,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         if (options.hasKey("extendedAddress")) {
             cardBuilder.extendedAddress(options.getString("extendedAddress"));
         }
+        
         Card.tokenize(mBraintreeFragment, cardBuilder);
     }
 
