@@ -9,6 +9,7 @@ import java.util.List;
 import android.content.Intent;
 import android.content.Context;
 import android.app.Activity;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -41,8 +42,10 @@ import com.braintreepayments.api.models.CardNonce;
 import com.braintreepayments.api.ThreeDSecure;
 import com.braintreepayments.api.models.ThreeDSecureInfo;
 import com.braintreepayments.api.models.ThreeDSecureRequest;
-
-
+import com.braintreepayments.api.models.ThreeDSecurePostalAddress;
+import com.braintreepayments.api.models.ThreeDSecureAdditionalInformation;
+import com.braintreepayments.api.interfaces.ThreeDSecureLookupListener;
+import com.braintreepayments.api.models.ThreeDSecureLookup;
 
 public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
     private static final int REQUEST_CODE = 0x444;
@@ -87,59 +90,39 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
     private final ThreeDSecureRequest getThreeDSecureRequest(final ReadableMap threeDSecureOpts, final String nonce) {
         String amount = String.valueOf(threeDSecureOpts.getDouble("amount")); // Required
-
         String email = null;
-        String givenName = null;
-        String surname = null;
-        String phoneNumber = null;
-        String streetAddress = null;
-        String extendedAddress = null;
-        String locality = null;
-        String region = null;
-        String postalCode = null;
-        String countryCodeAlpha2 = null;
 
+        ThreeDSecurePostalAddress address = new ThreeDSecurePostalAddress();
         if (threeDSecureOpts.hasKey("email")) {
             email = threeDSecureOpts.getString("email");
         }
         if (threeDSecureOpts.hasKey("givenName")) {
-            givenName = threeDSecureOpts.getString("givenName");
+            address.givenName = threeDSecureOpts.getString("givenName"); // ASCII-printable characters required, else will throw a validation error
         }
         if (threeDSecureOpts.hasKey("surname")) {
-            surname = threeDSecureOpts.getString("surname");
+            address.surname = threeDSecureOpts.getString("surname"); // ASCII-printable characters required, else will throw a validation error
         }
         if (threeDSecureOpts.hasKey("phoneNumber")) {
-            phoneNumber = threeDSecureOpts.getString("phoneNumber"); // Only number
+            address.phoneNumber = threeDSecureOpts.getString("phoneNumber"); // Only number
         }
         if (threeDSecureOpts.hasKey("streetAddress")) {
-            streetAddress = threeDSecureOpts.getString("streetAddress");
+            address.streetAddress = threeDSecureOpts.getString("streetAddress");
         }
         if (threeDSecureOpts.hasKey("extendedAddress")) {
-            extendedAddress = threeDSecureOpts.getString("extendedAddress");
+            address.extendedAddress = threeDSecureOpts.getString("extendedAddress");
         }
         if (threeDSecureOpts.hasKey("locality")) {
-            locality = threeDSecureOpts.getString("locality");
+            address.locality = threeDSecureOpts.getString("locality");
         }
         if (threeDSecureOpts.hasKey("region")) {
-            region = threeDSecureOpts.getString("region");
+            address.region = threeDSecureOpts.getString("region");
         }
         if (threeDSecureOpts.hasKey("postalCode")) {
-            postalCode = threeDSecureOpts.getString("postalCode");
+            address.postalCode = threeDSecureOpts.getString("postalCode");
         }
         if (threeDSecureOpts.hasKey("countryCodeAlpha2")) {
-            countryCodeAlpha2 = threeDSecureOpts.getString("countryCodeAlpha2");
+            address.countryCodeAlpha2 = threeDSecureOpts.getString("countryCodeAlpha2");
         }
-
-        ThreeDSecurePostalAddress address = new ThreeDSecurePostalAddress()
-            .givenName(givenName) // ASCII-printable characters required, else will throw a validation error
-            .surname(surname) // ASCII-printable characters required, else will throw a validation error
-            .phoneNumber(phoneNumber)
-            .streetAddress(streetAddress)
-            .extendedAddress(extendedAddress)
-            .locality(locality)
-            .region(region)
-            .postalCode(postalCode)
-            .countryCodeAlpha2(countryCodeAlpha2);
 
         // For best results, provide as many additional elements as possible.
         ThreeDSecureAdditionalInformation additionalInformation = new ThreeDSecureAdditionalInformation()
@@ -149,7 +132,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             .versionRequested(ThreeDSecureRequest.VERSION_2) // Required
             .amount(amount) // Required
             .email(email)
-            .billingAddress(address);
+            .billingAddress(address)
             .additionalInformation(additionalInformation);
         
         if (nonce != null) {
@@ -166,7 +149,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         } else if (!threeDSecureInfo.isLiabilityShifted()) {
             promise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
         } else {
-            promise.resolve(getPaymentNonce(paymentMethodNonce));
+            promise.resolve(getPaymentNonce(cardNonce));
         }
     }
     
@@ -181,24 +164,24 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                 promise.reject("NO_3DS_AMOUNT", "You must provide an amount for 3D Secure");
                 return false;
             }
-            this.threeDSecureOptions = threeDSecureOpts;
+            threeDSecureOptions = threeDSecureOpts;
         }
-        this.mPromise = promise;
+        mPromise = promise;
         return true;
     }
     
     private boolean setup(final ReadableMap options, final Promise promise) {
-        if (!this.validateParams(options, promise)) return false;
+        if (!validateParams(options, promise)) return false;
             
         String token = options.getString("clientToken");
         try {
-            this.mBraintreeFragment = BraintreeFragment.newInstance(getCurrentActivity(), token);
+            mBraintreeFragment = BraintreeFragment.newInstance((AppCompatActivity) getCurrentActivity(),  token);
         } catch (InvalidArgumentException e) {
-            promise.reject('INVALID_ARGUMENT_ERROR', e.getMessage());
+            promise.reject("INVALID_ARGUMENT_ERROR", e.getMessage());
             return false;
         }
 
-        final List<BraintreeListener> previousListeners = this.mBraintreeFragment.getListeners();
+        final List<BraintreeListener> previousListeners = mBraintreeFragment.getListeners();
         final ListenerHolder listenerHolder = new ListenerHolder();
         try {
             boolean isThreeDSecureVerificationComplete = false;
@@ -206,10 +189,9 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             BraintreeCancelListener cancelListener = new BraintreeCancelListener() {
                 @Override
                 public void onCancel(int requestCode) {
-                    this.resetListeners(this.mBraintreeFragment, listenerHolder, previousListeners);
+                    resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
 
                     promise.reject("USER_CANCELLATION", "The user cancelled");
-                    this.mBraintreeFragment.removeListener();
                 }
             };
             listenerHolder.listeners.add(cancelListener);
@@ -217,7 +199,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             BraintreeErrorListener errorListener = new BraintreeErrorListener() {
                 @Override
                 public void onError(Exception error) {
-                    this.resetListeners(this.mBraintreeFragment, listenerHolder, previousListeners);
+                    resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
 
                     if (error instanceof ErrorWithResponse) {
                         ErrorWithResponse errorWithResponse = (ErrorWithResponse) error;
@@ -243,9 +225,9 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                             if (cardholderNameError != null) {
                                 errors.putString("cardholder_name", cardholderNameError.getMessage());
                             }
-                            promise.reject('CARD_ERROR', errors);
+                            promise.reject("CARD_ERROR", errors);
                         } else {
-                            promise.reject('CARD_ERROR', errorWithResponse.getErrorResponse());
+                            promise.reject("CARD_ERROR", errorWithResponse.getErrorResponse());
                         }
                     }
                 }
@@ -255,10 +237,10 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             PaymentMethodNonceCreatedListener nonceListener = new PaymentMethodNonceCreatedListener() {
                 @Override
                 public void onPaymentMethodNonceCreated(PaymentMethodNonce paymentMethodNonce) {
-                    if (this.threeDSecureOptions != null && paymentMethodNonce instanceof CardNonce) {
+                    if (threeDSecureOptions != null && paymentMethodNonce instanceof CardNonce) {
                         CardNonce cardNonce = (CardNonce) paymentMethodNonce;
                         if (isThreeDSecureVerificationComplete) {
-                            this.resetListeners(this.mBraintreeFragment, listenerHolder, previousListeners);
+                            resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
                             isThreeDSecureVerificationComplete = false;
 
                             // ThreeDSecureInfo threeDSecureInfo = cardNonce.getThreeDSecureInfo();
@@ -269,21 +251,21 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                             // } else {
                             //     promise.resolve(getPaymentNonce(paymentMethodNonce));
                             // }
-                            this.checkCardThreeDSecure(cardNonce, promise);
+                            checkCardThreeDSecure(cardNonce, promise);
                             
                         } else {
-                            ThreeDSecureRequest threeDSecureRequest = this.getThreeDSecureRequest(this.threeDSecureOptions, cardNonce.getNonce());
-                            ThreeDSecure.performVerification(this.mBraintreeFragment, threeDSecureRequest, new ThreeDSecureLookupListener() {
+                            ThreeDSecureRequest threeDSecureRequest = getThreeDSecureRequest(threeDSecureOptions, cardNonce.getNonce());
+                            ThreeDSecure.performVerification(mBraintreeFragment, threeDSecureRequest, new ThreeDSecureLookupListener() {
                                 @Override
                                 public void onLookupComplete(ThreeDSecureRequest request, ThreeDSecureLookup lookup) {
                                     // Optionally inspect the lookup result and prepare UI if a challenge is required
                                     isThreeDSecureVerificationComplete = true;
-                                    ThreeDSecure.continuePerformVerification(this.mBraintreeFragment, request, lookup);
+                                    ThreeDSecure.continuePerformVerification(mBraintreeFragment, request, lookup);
                                 }
                             });
                         }
                     } else {
-                        this.resetListeners(this.mBraintreeFragment, listenerHolder, previousListeners);
+                        resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
                         
                         promise.resolve(getPaymentNonce(paymentMethodNonce));
                     }
@@ -292,14 +274,14 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             };
             listenerHolder.listeners.add(nonceListener);
 
-            this.mBraintreeFragment.addListener(cancelListener);
-            this.mBraintreeFragment.addListener(errorListener);
-            this.mBraintreeFragment.addListener(nonceListener);
+            mBraintreeFragment.addListener(cancelListener);
+            mBraintreeFragment.addListener(errorListener);
+            mBraintreeFragment.addListener(nonceListener);
 
             return true;
         } catch (Exception e) {
-            this.resetListeners(this.mBraintreeFragment, listenerHolder, previousListeners);
-            promise.reject('LISTENER_ERROR', e.getMessage());
+            resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
+            promise.reject("LISTENER_ERROR", e.getMessage());
 
             return false;
         }
@@ -308,8 +290,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void showPayPal(final ReadableMap options, final Promise promise) {
-        if (!this.setup(options, promise)) return;
-        if (!this.mBraintreeFragment) {
+        if (!setup(options, promise)) return;
+        if (mBraintreeFragment == null) {
             promise.reject("NO_BRAINTREE_FRAGMENT", "There is no mBraintreeFragment");
             return;
         }
@@ -333,8 +315,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void getCardNonce(final ReadableMap options, final Promise promise) {
-        if (!this.setup(options, promise)) return;
-        if (!this.mBraintreeFragment) {
+        if (!setup(options, promise)) return;
+        if (mBraintreeFragment == null) {
             promise.reject("NO_BRAINTREE_FRAGMENT", "There is no mBraintreeFragment");
             return;
         }
@@ -368,18 +350,18 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         if (options.hasKey("company")) {
             cardBuilder.company(options.getString("company"));
         }
-        if (options.hasKey("countryName")) {
-            cardBuilder.countryName(options.getString("countryName"));
-        }
-        if (options.hasKey("countryCodeAlpha2")) {
-            cardBuilder.countryCodeAlpha2(options.getString("countryCodeAlpha2"));
-        }
-        if (options.hasKey("countryCodeAlpha3")) {
-            cardBuilder.countryCodeAlpha3(options.getString("countryCodeAlpha3"));
-        }
-        if (options.hasKey("countryCodeNumeric")) {
-            cardBuilder.countryCodeNumeric(options.getString("countryCodeNumeric"));
-        }
+        // if (options.hasKey("countryName")) {
+        //     cardBuilder.countryName(options.getString("countryName"));
+        // }
+        // if (options.hasKey("countryCodeAlpha2")) {
+        //     cardBuilder.countryCodeAlpha2(options.getString("countryCodeAlpha2"));
+        // }
+        // if (options.hasKey("countryCodeAlpha3")) {
+        //     cardBuilder.countryCodeAlpha3(options.getString("countryCodeAlpha3"));
+        // }
+        // if (options.hasKey("countryCodeNumeric")) {
+        //     cardBuilder.countryCodeNumeric(options.getString("countryCodeNumeric"));
+        // }
         if (options.hasKey("locality")) {
             cardBuilder.locality(options.getString("locality"));
         }
@@ -395,12 +377,12 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         if (options.hasKey("extendedAddress")) {
             cardBuilder.extendedAddress(options.getString("extendedAddress"));
         }
-        Card.tokenize(this.mBraintreeFragment, cardBuilder);
+        Card.tokenize(mBraintreeFragment, cardBuilder);
     }
 
     @ReactMethod
     public void showDropIn(final ReadableMap options, final Promise promise) {
-        if (!this.validateParams(options, promise)) return;
+        if (!validateParams(options, promise)) return;
 
         Activity currentActivity = getCurrentActivity();
         if (currentActivity == null) {
@@ -422,14 +404,14 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         }
 
         if (options.hasKey("cardholderNameStatus")) {
-            dropInRequest.cardholderNameStatus(options.getInt("cardholderNameStatus"))
+            dropInRequest.cardholderNameStatus(options.getInt("cardholderNameStatus"));
         }
 
         // Check 3DS options
-        if (this.threeDSecureOptions != null) {
+        if (threeDSecureOptions != null) {
             dropInRequest
                 .requestThreeDSecureVerification(true)
-                .threeDSecureRequest(this.getThreeDSecureRequest(this.threeDSecureOptions));
+                .threeDSecureRequest(getThreeDSecureRequest(threeDSecureOptions, null));
         }
         
         currentActivity.startActivityForResult(dropInRequest.getIntent(currentActivity), REQUEST_CODE);
@@ -438,8 +420,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
     private final ActivityEventListener mActivityListener = new BaseActivityEventListener() {
         @Override
         public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent data) {
-            super.onActivityResult(requestCode, resultCode, data);
-            if (requestCode != this.REQUEST_CODE || this.mPromise == null) {
+            // super.onActivityResult(requestCode, resultCode, data);
+            if (requestCode != REQUEST_CODE || mPromise == null) {
                 return;
             }
 
@@ -447,28 +429,28 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                 DropInResult result = data.getParcelableExtra(DropInResult.EXTRA_DROP_IN_RESULT);
                 PaymentMethodNonce paymentMethodNonce = result.getPaymentMethodNonce();
 
-                if (this.threeDSecureOptions != null && paymentMethodNonce instanceof CardNonce) {
+                if (threeDSecureOptions != null && paymentMethodNonce instanceof CardNonce) {
                     CardNonce cardNonce = (CardNonce) paymentMethodNonce;
                     ThreeDSecureInfo threeDSecureInfo = cardNonce.getThreeDSecureInfo();
                     // if (!threeDSecureInfo.isLiabilityShiftPossible()) {
-                    //     this.mPromise.reject("3DSECURE_NOT_ABLE_TO_SHIFT_LIABILITY", "3D Secure liability cannot be shifted");
+                    //     mPromise.reject("3DSECURE_NOT_ABLE_TO_SHIFT_LIABILITY", "3D Secure liability cannot be shifted");
                     // } else if (!threeDSecureInfo.isLiabilityShifted()) {
-                    //     this.mPromise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
+                    //     mPromise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
                     // } else {
-                    //     this.mPromise.resolve(getPaymentNonce(paymentMethodNonce));
+                    //     mPromise.resolve(getPaymentNonce(paymentMethodNonce));
                     // }
-                    this.checkCardThreeDSecure(cardNonce, this.mPromise);
+                    checkCardThreeDSecure(cardNonce, mPromise);
                 } else {
-                    this.mPromise.resolve(getPaymentNonce(paymentMethodNonce));
+                    mPromise.resolve(getPaymentNonce(paymentMethodNonce));
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {
-                this.mPromise.reject("USER_CANCELLATION", "The user cancelled");
+                mPromise.reject("USER_CANCELLATION", "The user cancelled");
             } else {
                 Exception exception = (Exception) data.getSerializableExtra(DropInActivity.EXTRA_ERROR);
-                this.mPromise.reject(exception.getMessage(), exception.getMessage());
+                mPromise.reject(exception.getMessage(), exception.getMessage());
             }
 
-            this.mPromise = null;
+            mPromise = null;
         }
     };
 }
