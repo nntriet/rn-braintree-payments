@@ -1,16 +1,6 @@
 #import "BraintreePayments.h"
 
-
 @implementation BraintreePayments
-
-+ (instancetype)sharedInstance {
-    static RCTBraintree *_sharedInstance = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        _sharedInstance = [[RCTBraintree alloc] init];
-    });
-    return _sharedInstance;
-}
 
 - (dispatch_queue_t)methodQueue
 {
@@ -18,19 +8,7 @@
 }
 RCT_EXPORT_MODULE()
 
-+ (NSMutableDictionary *)getPaymentNonce:(NSString* _Nonnull)nonce type:(NSString* _Nonnull)type lastDigits:(NSString* _Nullable)lastDigits isDefault:(BOOL)isDefault
-{
-    NSString *extractNumberFromLastDigits = [[self class] extractNumberFromText :lastDigits]
 
-    NSMutableDictionary* jsResult = [NSMutableDictionary new];
-    [jsResult setObject:nonce forKey:@"nonce"];
-    [jsResult setObject:type forKey:@"type"];
-    [jsResult setObject:extractNumberFromLastDigits forKey:@"lastDigits"];
-    [jsResult setObject:self.clientToken forKey:@"clientToken"];
-    [jsResult setObject:[NSNumber numberWithBool:isDefault] forKey:@"isDefault"];
-    return jsResult;
-    // resolve(jsResult);
-}
 
 + (NSString *)extractNumberFromText:(NSString *)text
 {
@@ -38,24 +16,23 @@ RCT_EXPORT_MODULE()
   return [[text componentsSeparatedByCharactersInSet:nonDigitCharacterSet] componentsJoinedByString:@""];
 }
 
-+ (BTThreeDSecureRequest *)getThreeDSecureRequest:(NSDictionary *)threeDSecureOpts nonce:(NSString* _Nullable)nonce
++ (BTThreeDSecureRequest *)getThreeDSecureRequest: (NSDictionary *)threeDSecureOptions nonce:(NSString* _Nullable)nonce
 {
     BTThreeDSecureRequest *threeDSecureRequest = [[BTThreeDSecureRequest alloc] init];
     threeDSecureRequest.versionRequested = BTThreeDSecureVersion2;
-    NSNumber* threeDSecureAmount = threeDSecureOpts[@"amount"];
-    threeDSecureRequest.amount = [threeDSecureAmount stringValue];
-    threeDSecureRequest.email = threeDSecureOpts[@"email"];
+    threeDSecureRequest.amount = threeDSecureOptions[@"amount"];
+    threeDSecureRequest.email = threeDSecureOptions[@"email"];
 
     BTThreeDSecurePostalAddress *address = [BTThreeDSecurePostalAddress new];
-    address.givenName = threeDSecureOpts[@"givenName"]; // ASCII-printable characters required, else will throw a validation error
-    address.surname = threeDSecureOpts[@"surname"]; // ASCII-printable characters required, else will throw a validation error
-    address.phoneNumber = threeDSecureOpts[@"phoneNumber"];
-    address.streetAddress = threeDSecureOpts[@"streetAddress"];
-    address.extendedAddress = threeDSecureOpts[@"extendedAddress"];
-    address.locality = threeDSecureOpts[@"locality"];
-    address.region = threeDSecureOpts[@"region"];
-    address.postalCode = threeDSecureOpts[@"postalCode"];
-    address.countryCodeAlpha2 = threeDSecureOpts[@"countryCodeAlpha2"];
+    address.givenName = threeDSecureOptions[@"givenName"]; // ASCII-printable characters required, else will throw a validation error
+    address.surname = threeDSecureOptions[@"surname"]; // ASCII-printable characters required, else will throw a validation error
+    address.phoneNumber = threeDSecureOptions[@"phoneNumber"];
+    address.streetAddress = threeDSecureOptions[@"streetAddress"];
+    address.extendedAddress = threeDSecureOptions[@"extendedAddress"];
+    address.locality = threeDSecureOptions[@"locality"];
+    address.region = threeDSecureOptions[@"region"];
+    address.postalCode = threeDSecureOptions[@"postalCode"];
+    address.countryCodeAlpha2 = threeDSecureOptions[@"countryCodeAlpha2"];
 
     // Optional additional information.
     // For best results, provide as many of these elements as possible.
@@ -70,46 +47,10 @@ RCT_EXPORT_MODULE()
     return threeDSecureRequest;
 }
 
-+ (BOOL)validateParams:(NSDictionary *)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject
-{
-    NSString* clientToken = options[@"clientToken"];
-    if (!clientToken) {
-        reject(@"NO_CLIENT_TOKEN", @"You must provide a client token", nil);
-        return NO;
-    }
-    NSDictionary* threeDSecureOptions = options[@"threeDSecure"];
-    if (threeDSecureOptions) {
-        NSNumber* threeDSecureAmount = threeDSecureOptions[@"amount"];
-        if (!threeDSecureAmount) {
-            reject(@"NO_3DS_AMOUNT", @"You must provide an amount for 3D Secure", nil);
-            return NO;
-        }
-    }
-
-    self.clientToken = clientToken;
-    return YES;
-}
-
-+ (BOOL)setup:(NSDictionary *)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject
-{
-    BOOL isValidParams = [[self class] validateParams :options resolver:resolve rejecter:reject];
-    if (!isValidParams) {  
-       return NO;
-    }
-
-    NSString* clientToken = options[@"clientToken"];
-    self.braintreeClient = [[BTAPIClient alloc] initWithAuthorization:clientToken];
-    if (!self.braintreeClient) {
-        reject(@"NO_BRAINTREE_CLIENT", @"There is no self.braintreeClient", nil);
-        return NO;
-    }
-    return YES;
-}
-
 RCT_REMAP_METHOD(showDropIn,
                  showDropInWithOptions:(NSDictionary*)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 {
-    BOOL isValidParams = [[self class] validateParams :options resolver:resolve rejecter:reject];
+    BOOL isValidParams = [self validateParams :options resolver:resolve rejecter:reject];
     if (!isValidParams) {  
        return;
     }
@@ -132,7 +73,7 @@ RCT_REMAP_METHOD(showDropIn,
 
     NSDictionary* threeDSecureOptions = options[@"threeDSecure"];
     if (threeDSecureOptions) {
-        BTThreeDSecureRequest *threeDSecureRequest = [[self class] getThreeDSecureRequest :threeDSecureOptions];
+        BTThreeDSecureRequest *threeDSecureRequest = [[self class] getThreeDSecureRequest :threeDSecureOptions nonce:nil];
         if (!threeDSecureRequest) {
             request.threeDSecureVerification = YES;
             request.threeDSecureRequest = threeDSecureRequest;
@@ -155,14 +96,14 @@ RCT_REMAP_METHOD(showDropIn,
                     } else if (!cardNonce.threeDSecureInfo.liabilityShifted && cardNonce.threeDSecureInfo.wasVerified) {
                         reject(@"3DSECURE_LIABILITY_NOT_SHIFTED", @"3D Secure liability was not shifted", nil);
                     } else {
-                        resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
+                        resolve( [self getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] );
                     }
                 } else {
                     if ( [result.paymentMethod isKindOfClass:[BTCardNonce class]] ) {
                         BTCardNonce *cardNonce = (BTCardNonce *)result.paymentMethod;
-                        resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
+                        resolve( [self getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] );
                     } else {
-                        resolve( [[self class] getPaymentNonce :result.paymentMethod.nonce type:result.paymentMethod.type lastDigits:result.paymentDescription isDefault:result.paymentMethod.isDefault ] )
+                        resolve( [self getPaymentNonce :result.paymentMethod.nonce type:result.paymentMethod.type lastDigits:result.paymentDescription isDefault:result.paymentMethod.isDefault ] );
                     }
                 }
             }
@@ -178,7 +119,7 @@ RCT_REMAP_METHOD(showDropIn,
 RCT_REMAP_METHOD(showPayPal,
                  showPayPalWithOptions:(NSDictionary*)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 {
-    BOOL isSetup = [[self class] setup :options resolver:resolve rejecter:reject];
+    BOOL isSetup = [self setup :options resolver:resolve rejecter:reject];
     if (!isSetup) {  
        return;
     }
@@ -190,7 +131,7 @@ RCT_REMAP_METHOD(showPayPal,
         if (options[@"offerCredit"]) {
             request.offerCredit = [options[@"offerCredit"] boolValue];
         }
-        [self startPayPalCheckout:request];
+        [self startPayPalCheckout:request resolver:resolve rejecter:reject];
     } else {
         request = [[BTPayPalRequest alloc] init];
         if (options[@"offerCredit"]) {
@@ -203,7 +144,7 @@ RCT_REMAP_METHOD(showPayPal,
 RCT_REMAP_METHOD(getCardNonce,
                  getCardNonceWithOptions:(NSDictionary*)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 {
-    BOOL isSetup = [[self class] setup :options resolver:resolve rejecter:reject];
+    BOOL isSetup = [self setup :options resolver:resolve rejecter:reject];
     if (!isSetup) {  
        return;
     }
@@ -244,7 +185,7 @@ RCT_REMAP_METHOD(getCardNonce,
                                 reject(@"3DSECURE_LIABILITY_NOT_SHIFTED", @"3D Secure liability was not shifted", nil);
                             } else {
                                 // 3D Secure authentication success
-                                resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
+                                resolve( [self getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] );
                             }
                         } else {
                             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
@@ -256,7 +197,7 @@ RCT_REMAP_METHOD(getCardNonce,
                 
                 
             } else {
-                resolve( [[self class] getPaymentNonce :tokenizedCard.nonce type:tokenizedCard.type lastDigits:tokenizedCard.lastFour isDefault:tokenizedCard.isDefault ] )
+                resolve( [self getPaymentNonce :tokenizedCard.nonce type:tokenizedCard.type lastDigits:tokenizedCard.lastFour isDefault:tokenizedCard.isDefault ] );
             }
         } else {
             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
@@ -264,7 +205,57 @@ RCT_REMAP_METHOD(getCardNonce,
     }];
 }
 
-- (void)startPayPal:(BTPayPalRequest *)paypalRequest resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject {
+- (BOOL)validateParams:(NSDictionary *)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject
+{
+    NSString* clientToken = options[@"clientToken"];
+    if (!clientToken) {
+        reject(@"NO_CLIENT_TOKEN", @"You must provide a client token", nil);
+        return NO;
+    }
+    NSDictionary* threeDSecureOptions = options[@"threeDSecure"];
+    if (threeDSecureOptions) {
+        NSNumber* threeDSecureAmount = threeDSecureOptions[@"amount"];
+        if (!threeDSecureAmount) {
+            reject(@"NO_3DS_AMOUNT", @"You must provide an amount for 3D Secure", nil);
+            return NO;
+        }
+    }
+
+    self.clientToken = clientToken;
+    return YES;
+}
+
+- (BOOL)setup:(NSDictionary *)options resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject
+{
+    BOOL isValidParams = [self validateParams :options resolver:resolve rejecter:reject];
+    if (!isValidParams) {  
+       return NO;
+    }
+
+    NSString* clientToken = options[@"clientToken"];
+    self.braintreeClient = [[BTAPIClient alloc] initWithAuthorization:clientToken];
+    if (!self.braintreeClient) {
+        reject(@"NO_BRAINTREE_CLIENT", @"There is no self.braintreeClient", nil);
+        return NO;
+    }
+    return YES;
+}
+
+- (NSMutableDictionary *)getPaymentNonce:(NSString* _Nonnull)nonce type:(NSString* _Nonnull)type lastDigits:(NSString* _Nullable)lastDigits isDefault:(BOOL)isDefault
+{
+    NSString *extractNumberFromLastDigits = [[self class] extractNumberFromText :lastDigits];
+    NSMutableDictionary* jsResult = [NSMutableDictionary new];
+    [jsResult setObject:nonce forKey:@"nonce"];
+    [jsResult setObject:type forKey:@"type"];
+    [jsResult setObject:extractNumberFromLastDigits forKey:@"lastDigits"];
+    [jsResult setObject:self.clientToken forKey:@"clientToken"];
+    [jsResult setObject:[NSNumber numberWithBool:isDefault] forKey:@"isDefault"];
+    return jsResult;
+    // resolve(jsResult);
+}
+
+- (void)startPayPal:(BTPayPalRequest *)paypalRequest resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject
+{
     BTPayPalDriver *paypalDriver = [[BTPayPalDriver alloc] initWithAPIClient:self.braintreeClient];
     paypalDriver.viewControllerPresentingDelegate = self;
     // paypalDriver.appSwitchDelegate = self; // Optional
@@ -274,14 +265,15 @@ RCT_REMAP_METHOD(getCardNonce,
         if (error) {
             reject(error.localizedDescription, error.localizedDescription, error);
         } else if (tokenizedPayPalAccount) {
-            resolve( [[self class] getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type lastDigits:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] )
+            resolve( [self getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type lastDigits:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] );
         } else {
             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
         }
     }];
 }
 
-- (void)startPayPalCheckout:(BTPayPalRequest *)paypalRequest {
+- (void)startPayPalCheckout:(BTPayPalRequest *)paypalRequest resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject
+{
     BTPayPalDriver *paypalDriver = [[BTPayPalDriver alloc] initWithAPIClient:self.braintreeClient];
     paypalDriver.viewControllerPresentingDelegate = self;
     // paypalDriver.appSwitchDelegate = self; // Optional
@@ -291,7 +283,7 @@ RCT_REMAP_METHOD(getCardNonce,
         if (error) {
             reject(error.localizedDescription, error.localizedDescription, error);
         } else if (tokenizedPayPalAccount) {
-            resolve( [[self class] getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type lastDigits:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] )
+            resolve( [self getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type lastDigits:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] );
         } else {
             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
         }
@@ -300,22 +292,26 @@ RCT_REMAP_METHOD(getCardNonce,
 
 #pragma mark - BTViewControllerPresentingDelegate
 
-- (void)paymentDriver:(id)paymentDriver requestsPresentationOfViewController:(UIViewController *)viewController {
+- (void)paymentDriver:(id)paymentDriver requestsPresentationOfViewController:(UIViewController *)viewController 
+{
     [self.reactRoot presentViewController:viewController animated:YES completion:nil];
 }
 
-- (void)paymentDriver:(id)paymentDriver requestsDismissalOfViewController:(UIViewController *)viewController {
+- (void)paymentDriver:(id)paymentDriver requestsDismissalOfViewController:(UIViewController *)viewController 
+{
     if (!viewController.isBeingDismissed) {
         [viewController.presentingViewController dismissViewControllerAnimated:YES completion:nil];
     }
 }
 
-- (void)setupPaymentFlowDriver {
+- (void)setupPaymentFlowDriver 
+{
     self.paymentFlowDriver = [[BTPaymentFlowDriver alloc] initWithAPIClient:self.braintreeClient];
     self.paymentFlowDriver.viewControllerPresentingDelegate = self;
 }
 
-- (UIViewController*)reactRoot {
+- (UIViewController*)reactRoot 
+{
     UIViewController *root  = [UIApplication sharedApplication].keyWindow.rootViewController;
     UIViewController *maybeModal = root.presentedViewController;
 

@@ -24,5 +24,6 @@ Pod::Spec.new do |s|
   s.dependency "BraintreeDropIn"
   # Braintree Cards and PayPal
   s.dependency "Braintree"
+  s.dependency "Braintree/PaymentFlow"
 end
 
