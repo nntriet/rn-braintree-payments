@@ -328,13 +328,17 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
             // .localeCode(...) // Optional: da_DK, de_DE, en_AU, en_GB, en_US, es_ES, es_XC, fr_CA, fr_FR, fr_XC, id_ID, it_IT, ja_JP, ko_KR, nl_NL, no_NO, pl_PL, pt_BR, pt_PT, ru_RU, sv_SE, th_TH, tr_TR, zh_CN, zh_HK, zh_TW, zh_XC.
             // .billingAgreementDescription(...); // Optional: Display a custom description to the user for a billing agreement.
         if (!options.hasKey("amount")) {
-            paypalRequest = new PayPalRequest()
-                .offerCredit(true); // Offer PayPal Credit
+            paypalRequest = new PayPalRequest();
+            if (options.hasKey("offerCredit")) {
+                paypalRequest.offerCredit(options.getBoolean("offerCredit"));
+            }
             PayPal.requestBillingAgreement(mBraintreeFragment, paypalRequest);
         } else {
             String amount = String.valueOf(options.getDouble("amount"));
-            paypalRequest = new PayPalRequest(amount)
-                .offerCredit(true); // Offer PayPal Credit
+            paypalRequest = new PayPalRequest(amount);
+            if (options.hasKey("offerCredit")) {
+                paypalRequest.offerCredit(options.getBoolean("offerCredit"));
+            }
             PayPal.requestOneTimePayment(mBraintreeFragment, paypalRequest);
         }
     }

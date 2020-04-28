@@ -187,13 +187,15 @@ RCT_REMAP_METHOD(showPayPal,
     NSNumber* amount = options[@"amount"];
     if (amount != nil) {
         request = [[BTPayPalRequest alloc] initWithAmount:[amount stringValue]];
-        request.offerCredit = YES; // Offer PayPal Credit
-
+        if (options[@"offerCredit"]) {
+            request.offerCredit = [options[@"offerCredit"] boolValue];
+        }
         [self startPayPalCheckout:request];
     } else {
         request = [[BTPayPalRequest alloc] init];
-        request.offerCredit = YES; // Offer PayPal Credit
-
+        if (options[@"offerCredit"]) {
+            request.offerCredit = [options[@"offerCredit"] boolValue];
+        }
         [self startPayPal:request resolver:resolve rejecter:reject];
     }
 }
