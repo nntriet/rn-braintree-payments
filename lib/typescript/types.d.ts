@@ -26,6 +26,7 @@ export interface DropInOptions extends Options {
 }
 export interface PayPalOptions extends Options {
     amount?: number;
+    offerCredit?: boolean;
 }
 interface GetCardNonceOptionsAndroid {
     /**
