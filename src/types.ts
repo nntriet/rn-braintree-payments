@@ -30,7 +30,32 @@ export interface PayPalOptions extends Options {
   amount?: number; // one-time checkout amount
 }
 
-export interface GetCardNonceOptions extends Options {
+interface GetCardNonceOptionsAndroid {
+  /**
+   * @platform android
+   */
+  countryCode?: string;
+}
+
+interface GetCardNonceOptionsIOS {
+  /**
+   * @platform ios
+   */
+  countryName?: string;
+  /**
+   * @platform ios
+   */
+  countryCodeAlpha2?: string;
+  /**
+   * @platform ios
+   */
+  countryCodeAlpha3?: string;
+  /**
+   * @platform ios
+   */
+  countryCodeNumeric?: string;
+}
+interface GetCardNonceBaseOptions extends Options {
   number: string;
   cvv: string;
   expirationDate: string;
@@ -38,20 +63,21 @@ export interface GetCardNonceOptions extends Options {
   firstName?: string;
   lastName?: string;
   company?: string;
-  countryName?: string;
-  countryCodeAlpha2?: string;
-  countryCodeAlpha3?: string;
-  countryCodeNumeric?: string;
   locality?: string;
   postalCode?: string;
   region?: string;
   streetAddress?: string;
   extendedAddress?: string;
+  validate?: boolean;
 }
 
+export type GetCardNonceOptions = GetCardNonceBaseOptions &
+  GetCardNonceOptionsIOS &
+  GetCardNonceOptionsAndroid;
 export interface PaymentNonce {
   nonce: string;
   type: string;
-  description: string;
+  lastDigits: string;
+  clientToken: string;
   isDefault: boolean;
 }

@@ -50,7 +50,9 @@ import com.braintreepayments.api.models.ThreeDSecureLookup;
 public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
     private static final int REQUEST_CODE = 0x444;
 
+    private String clientToken;
     private ReadableMap threeDSecureOptions;
+
     private BraintreeFragment mBraintreeFragment;
     private Promise mPromise;
 
@@ -81,11 +83,12 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         }
     }
 
-    private final WritableMap getPaymentNonce(String nonce, String type, String description, boolean isDefault) {
+    private final WritableMap getPaymentNonce(String nonce, String type, String lastDigits, boolean isDefault) {
         WritableMap jsResult = Arguments.createMap();
         jsResult.putString("nonce", nonce);
         jsResult.putString("type", type);
-        jsResult.putString("description", description);
+        jsResult.putString("lastDigits", lastDigits);
+        jsResult.putString("clientToken", clientToken);
         jsResult.putBoolean("isDefault", isDefault);
         return jsResult;
     }
@@ -171,7 +174,7 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         } else if (!threeDSecureInfo.isLiabilityShifted()) {
             promise.reject("3DSECURE_LIABILITY_NOT_SHIFTED", "3D Secure liability was not shifted");
         } else {
-            promise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), "ending in " +cardNonce.getLastFour(), cardNonce.isDefault()));
+            promise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), cardNonce.getLastFour(), cardNonce.isDefault()));
         }
     }
     
@@ -190,6 +193,8 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         } else {
             threeDSecureOptions = null;
         }
+
+        clientToken = options.getString("clientToken");
         mPromise = promise;
         return true;
     }
@@ -207,8 +212,6 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
         final List<BraintreeListener> previousListeners = mBraintreeFragment.getListeners();
         final ListenerHolder listenerHolder = new ListenerHolder();
-        
-
         try {
             BraintreeCancelListener cancelListener = new BraintreeCancelListener() {
                 @Override
@@ -284,9 +287,13 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                         resetListeners(mBraintreeFragment, listenerHolder, previousListeners);
                         if (paymentMethodNonce instanceof CardNonce) {
                             CardNonce cardNonce = (CardNonce) paymentMethodNonce;
-                            promise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), "ending in " +cardNonce.getLastFour(), cardNonce.isDefault()));
+                            promise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), cardNonce.getLastFour(), cardNonce.isDefault()));
                         } else {
-                            promise.resolve(getPaymentNonce(paymentMethodNonce.getNonce(), paymentMethodNonce.getTypeLabel(), paymentMethodNonce.getDescription(), paymentMethodNonce.isDefault()));
+                            String lastDigits = "";
+                            if (paymentMethodNonce.getDescription() != null) {
+                                lastDigits = paymentMethodNonce.getDescription().replaceAll("\\D+","");
+                            }
+                            promise.resolve(getPaymentNonce(paymentMethodNonce.getNonce(), paymentMethodNonce.getTypeLabel(), lastDigits, paymentMethodNonce.isDefault()));
                         }
                     }
 
@@ -305,7 +312,6 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
 
             return false;
         }
-        
     }
 
     @ReactMethod
@@ -369,18 +375,9 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         if (options.hasKey("company")) {
             cardBuilder.company(options.getString("company"));
         }
-        // if (options.hasKey("countryName")) {
-        //     cardBuilder.countryName(options.getString("countryName"));
-        // }
-        // if (options.hasKey("countryCodeAlpha2")) {
-        //     cardBuilder.countryCodeAlpha2(options.getString("countryCodeAlpha2"));
-        // }
-        // if (options.hasKey("countryCodeAlpha3")) {
-        //     cardBuilder.countryCodeAlpha3(options.getString("countryCodeAlpha3"));
-        // }
-        // if (options.hasKey("countryCodeNumeric")) {
-        //     cardBuilder.countryCodeNumeric(options.getString("countryCodeNumeric"));
-        // }
+        if (options.hasKey("countryCode")) {
+            cardBuilder.countryCode(options.getString("countryCode"));
+        }
         if (options.hasKey("locality")) {
             cardBuilder.locality(options.getString("locality"));
         }
@@ -396,7 +393,14 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
         if (options.hasKey("extendedAddress")) {
             cardBuilder.extendedAddress(options.getString("extendedAddress"));
         }
-        
+        if (options.hasKey("extendedAddress")) {
+            cardBuilder.extendedAddress(options.getString("extendedAddress"));
+        }
+        if (!options.hasKey("validate")) {
+            cardBuilder.validate(false);
+        } else {
+            cardBuilder.validate(options.getBoolean("validate"));
+        }
         Card.tokenize(mBraintreeFragment, cardBuilder);
     }
 
@@ -455,9 +459,13 @@ public class BraintreePaymentsModule extends ReactContextBaseJavaModule {
                 } else {
                     if (paymentMethodNonce instanceof CardNonce) {
                         CardNonce cardNonce = (CardNonce) paymentMethodNonce;
-                        mPromise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), "ending in " +cardNonce.getLastFour(), cardNonce.isDefault()));
+                        mPromise.resolve(getPaymentNonce(cardNonce.getNonce(), cardNonce.getTypeLabel(), cardNonce.getLastFour(), cardNonce.isDefault()));
                     } else {
-                        mPromise.resolve(getPaymentNonce(paymentMethodNonce.getNonce(), paymentMethodNonce.getTypeLabel(), paymentMethodNonce.getDescription(), paymentMethodNonce.isDefault()));
+                        String lastDigits = "";
+                        if (paymentMethodNonce.getDescription() != null) {
+                            lastDigits = paymentMethodNonce.getDescription().replaceAll("\\D+","");
+                        }
+                        mPromise.resolve(getPaymentNonce(paymentMethodNonce.getNonce(), paymentMethodNonce.getTypeLabel(), lastDigits, paymentMethodNonce.isDefault()));
                     }
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {

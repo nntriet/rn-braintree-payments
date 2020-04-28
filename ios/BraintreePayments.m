@@ -18,15 +18,24 @@
 }
 RCT_EXPORT_MODULE()
 
-+ (NSMutableDictionary *)getPaymentNonce:(NSString* _Nonnull)nonce type:(NSString* _Nonnull)type description:(NSString* _Nullable)description isDefault:(BOOL)isDefault;
++ (NSMutableDictionary *)getPaymentNonce:(NSString* _Nonnull)nonce type:(NSString* _Nonnull)type lastDigits:(NSString* _Nullable)lastDigits isDefault:(BOOL)isDefault
 {
+    NSString *extractNumberFromLastDigits = [[self class] extractNumberFromText :lastDigits]
+
     NSMutableDictionary* jsResult = [NSMutableDictionary new];
     [jsResult setObject:nonce forKey:@"nonce"];
     [jsResult setObject:type forKey:@"type"];
-    [jsResult setObject:description forKey:@"description"];
+    [jsResult setObject:extractNumberFromLastDigits forKey:@"lastDigits"];
+    [jsResult setObject:self.clientToken forKey:@"clientToken"];
     [jsResult setObject:[NSNumber numberWithBool:isDefault] forKey:@"isDefault"];
     return jsResult;
     // resolve(jsResult);
+}
+
++ (NSString *)extractNumberFromText:(NSString *)text
+{
+  NSCharacterSet *nonDigitCharacterSet = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+  return [[text componentsSeparatedByCharactersInSet:nonDigitCharacterSet] componentsJoinedByString:@""];
 }
 
 + (BTThreeDSecureRequest *)getThreeDSecureRequest:(NSDictionary *)threeDSecureOpts nonce:(NSString* _Nullable)nonce
@@ -76,6 +85,8 @@ RCT_EXPORT_MODULE()
             return NO;
         }
     }
+
+    self.clientToken = clientToken;
     return YES;
 }
 
@@ -144,10 +155,15 @@ RCT_REMAP_METHOD(showDropIn,
                     } else if (!cardNonce.threeDSecureInfo.liabilityShifted && cardNonce.threeDSecureInfo.wasVerified) {
                         reject(@"3DSECURE_LIABILITY_NOT_SHIFTED", @"3D Secure liability was not shifted", nil);
                     } else {
-                        resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type description:result.paymentDescription isDefault:cardNonce.isDefault ] )
+                        resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
                     }
                 } else {
-                    resolve( [[self class] getPaymentNonce :result.paymentMethod.nonce type:result.paymentMethod.type description:result.paymentDescription isDefault:result.paymentMethod.isDefault ] )
+                    if ( [result.paymentMethod isKindOfClass:[BTCardNonce class]] ) {
+                        BTCardNonce *cardNonce = (BTCardNonce *)result.paymentMethod;
+                        resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
+                    } else {
+                        resolve( [[self class] getPaymentNonce :result.paymentMethod.nonce type:result.paymentMethod.type lastDigits:result.paymentDescription isDefault:result.paymentMethod.isDefault ] )
+                    }
                 }
             }
         }];
@@ -192,7 +208,13 @@ RCT_REMAP_METHOD(getCardNonce,
 
     BTCardClient *cardClient = [[BTCardClient alloc] initWithAPIClient:self.braintreeClient];
     BTCard *card = [[BTCard alloc] initWithParameters:options];
-    card.shouldValidate = YES;
+    if(!options[@"validate"]) {
+        card.shouldValidate = NO;
+    } else {
+        BOOL validate = [options[@"validate"] boolValue];
+        card.shouldValidate = validate;
+    }
+    
 
     [cardClient tokenizeCard:card
                     completion:^(BTCardNonce *tokenizedCard, NSError *cardClientError) {
@@ -220,7 +242,7 @@ RCT_REMAP_METHOD(getCardNonce,
                                 reject(@"3DSECURE_LIABILITY_NOT_SHIFTED", @"3D Secure liability was not shifted", nil);
                             } else {
                                 // 3D Secure authentication success
-                                resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type description:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
+                                resolve( [[self class] getPaymentNonce :cardNonce.nonce type:cardNonce.type lastDigits:cardNonce.lastFour isDefault:cardNonce.isDefault ] )
                             }
                         } else {
                             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
@@ -232,7 +254,7 @@ RCT_REMAP_METHOD(getCardNonce,
                 
                 
             } else {
-                resolve( [[self class] getPaymentNonce :tokenizedCard.nonce type:tokenizedCard.type description:tokenizedCard.lastFour isDefault:tokenizedCard.isDefault ] )
+                resolve( [[self class] getPaymentNonce :tokenizedCard.nonce type:tokenizedCard.type lastDigits:tokenizedCard.lastFour isDefault:tokenizedCard.isDefault ] )
             }
         } else {
             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
@@ -250,7 +272,7 @@ RCT_REMAP_METHOD(getCardNonce,
         if (error) {
             reject(error.localizedDescription, error.localizedDescription, error);
         } else if (tokenizedPayPalAccount) {
-            resolve( [[self class] getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type description:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] )
+            resolve( [[self class] getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type lastDigits:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] )
         } else {
             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
         }
@@ -267,7 +289,7 @@ RCT_REMAP_METHOD(getCardNonce,
         if (error) {
             reject(error.localizedDescription, error.localizedDescription, error);
         } else if (tokenizedPayPalAccount) {
-            resolve( [[self class] getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type description:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] )
+            resolve( [[self class] getPaymentNonce :tokenizedPayPalAccount.nonce type:tokenizedPayPalAccount.type lastDigits:@"Paypal" isDefault:tokenizedPayPalAccount.isDefault ] )
         } else {
             reject(@"USER_CANCELLATION", @"The user cancelled", nil);
         }

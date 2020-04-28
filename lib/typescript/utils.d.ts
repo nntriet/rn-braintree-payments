@@ -19,5 +19,5 @@ interface IOSGetCardNonceOptions extends Options {
         extendedAddress?: string;
     };
 }
-declare const convertGetCardNonceOptions: (options: GetCardNonceOptions) => GetCardNonceOptions | IOSGetCardNonceOptions;
+declare const convertGetCardNonceOptions: (options: GetCardNonceOptions) => IOSGetCardNonceOptions | GetCardNonceOptions;
 export { convertGetCardNonceOptions };
