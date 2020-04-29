@@ -170,7 +170,7 @@ RCT_REMAP_METHOD(getCardNonce,
                 if (!threeDSecureRequest) {
                     // Make sure that self conforms to the BTThreeDSecureRequestDelegate protocol
                     threeDSecureRequest.threeDSecureRequestDelegate = self;
-
+                    [self setupPaymentFlowDriver];
                     [self.paymentFlowDriver startPaymentFlow:threeDSecureRequest completion:^(BTPaymentFlowResult *result, NSError *paymentFlowDriverError) {
                         if (paymentFlowDriverError) {
                             reject(paymentFlowDriverError.localizedDescription, paymentFlowDriverError.localizedDescription, paymentFlowDriverError);
@@ -290,6 +290,12 @@ RCT_REMAP_METHOD(getCardNonce,
     }];
 }
 
+- (void)setupPaymentFlowDriver 
+{
+    self.paymentFlowDriver = [[BTPaymentFlowDriver alloc] initWithAPIClient:self.braintreeClient];
+    self.paymentFlowDriver.viewControllerPresentingDelegate = self;
+}
+
 #pragma mark - BTViewControllerPresentingDelegate
 
 - (void)paymentDriver:(id)paymentDriver requestsPresentationOfViewController:(UIViewController *)viewController 
@@ -302,12 +308,6 @@ RCT_REMAP_METHOD(getCardNonce,
     if (!viewController.isBeingDismissed) {
         [viewController.presentingViewController dismissViewControllerAnimated:YES completion:nil];
     }
-}
-
-- (void)setupPaymentFlowDriver 
-{
-    self.paymentFlowDriver = [[BTPaymentFlowDriver alloc] initWithAPIClient:self.braintreeClient];
-    self.paymentFlowDriver.viewControllerPresentingDelegate = self;
 }
 
 - (UIViewController*)reactRoot 
